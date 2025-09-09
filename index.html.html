@@ -1,0 +1,513 @@
+<!-- save as securetext_web.html -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SecureText — Client-side Web App</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#fff; --text:#111; --muted:#556;
+    --accent:#2563eb; --danger:#e02424;
+  }
+  [data-theme="dark"]{
+    --bg:#0f1724; --card:#0b1220; --text:#e6eef8; --muted:#9fb0d9;
+    --accent:#60a5fa; --danger:#ff7b7b;
+  }
+  *{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{margin:0;background:var(--bg);color:var(--text);padding:18px;}
+  .wrap{max-width:980px;margin:10px auto;}
+  header{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:18px}
+  header h1{margin:0;font-size:20px}
+  .controls{display:flex;gap:8px;align-items:center}
+  .card{background:var(--card);border-radius:10px;padding:14px;box-shadow:0 6px 20px rgba(2,6,23,0.06);margin-bottom:12px}
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tab{padding:8px 12px;border-radius:8px;cursor:pointer;background:transparent;border:1px solid transparent}
+  .tab.active{background:linear-gradient(90deg,var(--accent),#1d4ed8);color:white}
+  textarea,input[type="text"],select{width:100%;padding:8px;border-radius:6px;border:1px solid #ccd;resize:vertical}
+  label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .btn{padding:8px 12px;border-radius:8px;border:none;cursor:pointer;background:var(--accent);color:white}
+  .btn.secondary{background:#6b7280}
+  .btn.danger{background:var(--danger)}
+  pre{background:#081428;color:#dbeafe;padding:10px;border-radius:6px;overflow:auto}
+  .small{font-size:13px;color:var(--muted)}
+  .inline{display:flex;gap:8px;align-items:center}
+  input[type="file"]{padding:6px}
+  .foot{font-size:12px;color:var(--muted);margin-top:6px}
+  .flex{display:flex;gap:8px;align-items:center}
+  .result-box{white-space:pre-wrap;word-break:break-word;padding:8px;border-radius:6px;border:1px dashed #cbd5e1;background:linear-gradient(180deg,#fff,#fbfbff)}
+  .muted{color:var(--muted)}
+  @media (max-width:760px){.row{grid-template-columns:1fr}.row-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app" data-theme="light">
+  <header>
+    <div>
+      <h1>SecureText — Client-side Web</h1>
+      <div class="small muted">AES-GCM (PBKDF2) & RSA-OAEP in the browser — keys never leave your device</div>
+    </div>
+    <div class="controls">
+      <button class="btn secondary" id="toggleTheme">Dark</button>
+      <button class="btn" id="aboutBtn">About</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" data-tab="symmetric">🔐 Symmetric</button>
+      <button class="tab" data-tab="asymmetric">🔑 Asymmetric</button>
+      <button class="tab" data-tab="file">🗂 File</button>
+    </div>
+
+    <!-- SYMMETRIC -->
+    <div id="symmetric" class="panel">
+      <div class="row">
+        <div>
+          <label>Plaintext (text)</label>
+          <textarea id="symPlain" rows="6" placeholder="Type message here..."></textarea>
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="symPassword" type="text" placeholder="Enter passphrase"/>
+          <div style="height:8px"></div>
+          <label>PBKDF2 iterations (browser-friendly)</label>
+          <input id="symIters" type="text" value="200000"/>
+          <div style="height:8px"></div>
+          <div class="row-3">
+            <button class="btn" id="symEncrypt">Encrypt ➜</button>
+            <button class="btn secondary" id="symDecrypt">Decrypt ⬅</button>
+            <button class="btn secondary" id="symClear">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Result (JSON with base64/hex fields)</label>
+        <div class="result-box" id="symResult" style="min-height:80px"></div>
+        <div style="margin-top:8px" class="inline">
+          <button class="btn" id="copySym">Copy</button>
+          <button class="btn secondary" id="downloadSym">Download JSON</button>
+          <div class="small muted">Format: {"salt":"hex","iv":"base64","cipher":"base64"}</div>
+        </div>
+      </div>
+
+      <hr style="margin:12px 0"/>
+
+      <div>
+        <label>Paste encrypted JSON here to decrypt</label>
+        <textarea id="symEncryptedIn" rows="4" placeholder='{"salt":"...","iv":"...","cipher":"..."}'></textarea>
+        <div style="margin-top:8px" class="inline">
+          <input id="symPassword2" type="text" placeholder="Password (for decryption)"/>
+          <button class="btn" id="symDoDecrypt">Decrypt</button>
+        </div>
+        <div style="margin-top:8px">
+          <label>Decrypted Plaintext</label>
+          <div class="result-box" id="symDecrypted" style="min-height:60px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASYMMETRIC -->
+    <div id="asymmetric" class="panel" style="display:none">
+      <div class="row">
+        <div>
+          <label>Public Key (PEM)</label>
+          <textarea id="pubPem" rows="6" placeholder="Paste or generate a public key"></textarea>
+          <div style="margin-top:8px" class="inline">
+            <button class="btn" id="importPub">Import Public PEM</button>
+            <button class="btn secondary" id="clearPub">Clear</button>
+          </div>
+
+          <div style="margin-top:12px">
+            <label>Plaintext to encrypt (small)</label>
+            <textarea id="rsaPlain" rows="4"></textarea>
+            <div style="margin-top:8px" class="inline">
+              <button class="btn" id="rsaEncryptBtn">Encrypt (public)</button>
+              <button class="btn secondary" id="copyRsaCipher">Copy Ciphertext</button>
+            </div>
+            <label style="margin-top:8px">Ciphertext (base64)</label>
+            <div class="result-box" id="rsaCipher" style="min-height:60px"></div>
+          </div>
+        </div>
+
+        <div>
+          <label>Private Key (PEM)</label>
+          <textarea id="privPem" rows="6" placeholder="Paste private key PEM to use for decryption"></textarea>
+          <div style="margin-top:8px" class="inline">
+            <button class="btn" id="importPriv">Import Private PEM</button>
+            <button class="btn secondary" id="clearPriv">Clear</button>
+          </div>
+
+          <div style="margin-top:12px">
+            <label>Ciphertext to decrypt (base64)</label>
+            <textarea id="rsaCipherIn" rows="4"></textarea>
+            <div style="margin-top:8px" class="inline">
+              <button class="btn" id="rsaDecryptBtn">Decrypt (private)</button>
+              <button class="btn secondary" id="genKeyPair">Generate Key Pair</button>
+            </div>
+            <label style="margin-top:8px">Decrypted Plaintext</label>
+            <div class="result-box" id="rsaPlainOut" style="min-height:60px"></div>
+            <div style="margin-top:6px" class="small muted">RSA-OAEP SHA-256, 2048-bit</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="row">
+        <div>
+          <button class="btn" id="savePub">Download Public PEM</button>
+          <button class="btn secondary" id="savePriv">Download Private PEM</button>
+        </div>
+        <div class="small muted">Warning: Keep private PEM safe. If you export it unencrypted, anyone with the file can decrypt messages.</div>
+      </div>
+    </div>
+
+    <!-- FILE -->
+    <div id="file" class="panel" style="display:none">
+      <div>
+        <label>Encrypt / Decrypt Files (Symmetric AES-GCM)</label>
+        <div class="row">
+          <div>
+            <label>Select file to encrypt</label>
+            <input id="fileToEncrypt" type="file" />
+            <label>Passphrase for file encryption</label>
+            <input id="filePass" type="text" placeholder="Passphrase" />
+            <div style="margin-top:8px" class="inline">
+              <button class="btn" id="encryptFileBtn">Encrypt File</button>
+              <button class="btn secondary" id="clearFileFields">Clear</button>
+            </div>
+            <div class="foot muted">Encrypted file will be downloaded as <filename>.securetext (JSON wrapper with base64 data)</div>
+          </div>
+          <div>
+            <label>Decrypt file (.securetext)</label>
+            <input id="fileToDecrypt" type="file" />
+            <label>Passphrase for decryption</label>
+            <input id="filePass2" type="text" />
+            <div style="margin-top:8px" class="inline">
+              <button class="btn" id="decryptFileBtn">Decrypt File</button>
+            </div>
+            <div class="foot muted">Decrypted file will be downloaded with original filename.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card small muted">
+    <b>Notes:</b> This app uses PBKDF2 in-browser. High iteration counts increase security but also CPU usage. RSA key ops are slow on low-end devices. Keys and data never leave your browser unless you choose to download or paste them somewhere.
+  </div>
+</div>
+
+<script>
+/* ---------- Utilities ---------- */
+const u8 = s=> new TextEncoder().encode(s);
+const u8d = b=> new TextDecoder().decode(b);
+const toBase64 = ab => btoa(String.fromCharCode(...new Uint8Array(ab)));
+const fromBase64 = str => Uint8Array.from(atob(str), c=>c.charCodeAt(0));
+const hex = b=> Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');
+const fromHex = h => new Uint8Array(h.match(/.{1,2}/g).map(b=>parseInt(b,16)));
+
+function download(filename, content, type='application/octet-stream'){
+  const a = document.createElement('a');
+  const blob = new Blob([content], {type});
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},5000);
+}
+
+/* ---------- PBKDF2 -> AES-GCM ---------- */
+async function deriveAesKey(password, saltHex, iterations=200000){
+  const salt = fromHex(saltHex);
+  const passKey = await crypto.subtle.importKey('raw', u8(password), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({
+    name:'PBKDF2',
+    salt,
+    iterations: parseInt(iterations,10),
+    hash:'SHA-256'
+  }, passKey, {name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
+  return key;
+}
+
+/* Create random salt */
+function randomSaltHex(){
+  const s = crypto.getRandomValues(new Uint8Array(16)); return hex(s);
+}
+
+/* AES-GCM encrypt - returns JSON string fields */
+async function aesEncryptJson(plaintext, password, iterations){
+  const salt = randomSaltHex();
+  const key = await deriveAesKey(password, salt, iterations);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipher = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, u8(plaintext));
+  return JSON.stringify({
+    salt: salt,
+    iv: toBase64(iv),
+    cipher: toBase64(cipher)
+  });
+}
+
+async function aesDecryptJson(jsonIn, password, iterations){
+  const obj = typeof jsonIn === 'string' ? JSON.parse(jsonIn) : jsonIn;
+  if(!obj.salt || !obj.iv || !obj.cipher) throw new Error('Invalid format');
+  const key = await deriveAesKey(password, obj.salt, iterations);
+  const ct = fromBase64(obj.cipher);
+  const iv = fromBase64(obj.iv);
+  const plainAB = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  return u8d(new Uint8Array(plainAB));
+}
+
+/* ---------- PEM <-> CryptoKey helpers for RSA ---------- */
+function arrayBufferToBase64(ab){
+  return btoa(String.fromCharCode(...new Uint8Array(ab)));
+}
+function base64ToArrayBuffer(b64){
+  return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)).buffer;
+}
+function wrapPEM(b64, label){
+  const lines = b64.match(/.{1,64}/g).join('\n');
+  return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----\n`;
+}
+function pemToBinary(pem){
+  const lines = pem.trim().split('\\n').filter(l=>!l.includes('BEGIN') && !l.includes('END')).join('');
+  return base64ToArrayBuffer(lines);
+}
+
+/* Export key -> PEM */
+async function exportPublicKeyToPem(key){
+  const spki = await crypto.subtle.exportKey('spki', key);
+  const b64 = arrayBufferToBase64(spki);
+  return wrapPEM(b64, 'PUBLIC KEY');
+}
+async function exportPrivateKeyToPem(key){
+  const pkcs8 = await crypto.subtle.exportKey('pkcs8', key);
+  const b64 = arrayBufferToBase64(pkcs8);
+  return wrapPEM(b64, 'PRIVATE KEY');
+}
+
+/* Import PEM -> CryptoKey */
+async function importPublicPem(pem){
+  const ab = pemToBinary(pem);
+  return crypto.subtle.importKey('spki', ab, {name:'RSA-OAEP', hash:'SHA-256'}, true, ['encrypt']);
+}
+async function importPrivatePem(pem){
+  const ab = pemToBinary(pem);
+  return crypto.subtle.importKey('pkcs8', ab, {name:'RSA-OAEP', hash:'SHA-256'}, true, ['decrypt']);
+}
+
+/* ---------- RSA encrypt/decrypt ---------- */
+async function generateRsaPair(){
+  const kp = await crypto.subtle.generateKey({
+    name:'RSA-OAEP',
+    modulusLength:2048,
+    publicExponent: new Uint8Array([0x01,0x00,0x01]),
+    hash:'SHA-256'
+  }, true, ['encrypt','decrypt']);
+  return kp;
+}
+async function rsaEncrypt(publicKey, plaintext){
+  const ct = await crypto.subtle.encrypt({name:'RSA-OAEP'}, publicKey, u8(plaintext));
+  return arrayBufferToBase64(ct);
+}
+async function rsaDecrypt(privateKey, b64Cipher){
+  const ct = base64ToArrayBuffer(b64Cipher);
+  const ptAB = await crypto.subtle.decrypt({name:'RSA-OAEP'}, privateKey, ct);
+  return u8d(new Uint8Array(ptAB));
+}
+
+/* ---------- DOM wiring ---------- */
+const panels = document.querySelectorAll('.panel');
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', ()=> {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    const target = btn.dataset.tab;
+    panels.forEach(p=>p.style.display = p.id===target ? '' : 'none');
+  });
+});
+
+const app = document.getElementById('app');
+document.getElementById('toggleTheme').addEventListener('click', ()=>{
+  const cur = app.getAttribute('data-theme');
+  const next = cur === 'light' ? 'dark' : 'light';
+  app.setAttribute('data-theme', next);
+  document.getElementById('toggleTheme').textContent = next==='light' ? 'Dark' : 'Light';
+});
+
+/* Symmetric UI */
+const symPlain = document.getElementById('symPlain');
+const symPass = document.getElementById('symPassword');
+const symIters = document.getElementById('symIters');
+const symEncrypt = document.getElementById('symEncrypt');
+const symResult = document.getElementById('symResult');
+const copySym = document.getElementById('copySym');
+const downloadSym = document.getElementById('downloadSym');
+const symClear = document.getElementById('symClear');
+const symEncryptedIn = document.getElementById('symEncryptedIn');
+const symPassword2 = document.getElementById('symPassword2');
+const symDoDecrypt = document.getElementById('symDoDecrypt');
+const symDecrypted = document.getElementById('symDecrypted');
+symEncrypt.addEventListener('click', async ()=>{
+  try{
+    const text = symPlain.value.trim();
+    const pass = symPass.value;
+    const iters = parseInt(symIters.value || '200000',10);
+    if(!text) return alert('Enter plaintext');
+    if(!pass) return alert('Enter password');
+    symResult.textContent = 'Working — this may take a few seconds...';
+    const out = await aesEncryptJson(text, pass, iters);
+    symResult.textContent = out;
+  }catch(e){symResult.textContent = 'Error: '+e.message}
+});
+copySym.addEventListener('click', ()=>{navigator.clipboard.writeText(symResult.textContent).then(()=>alert('Copied'))});
+downloadSym.addEventListener('click', ()=>{ if(!symResult.textContent) return alert('No result'); download('securetext_encrypted.json', symResult.textContent, 'application/json')});
+symClear.addEventListener('click', ()=>{ symPlain.value=''; symPass.value=''; symResult.textContent=''; symEncryptedIn.value=''; symPassword2.value=''; symDecrypted.textContent='';});
+symDoDecrypt.addEventListener('click', async ()=>{
+  try{
+    const js = symEncryptedIn.value.trim();
+    const pass = symPassword2.value;
+    const iters = parseInt(symIters.value || '200000',10);
+    if(!js) return alert('Paste encrypted JSON');
+    if(!pass) return alert('Enter password');
+    symDecrypted.textContent = 'Working...';
+    const pt = await aesDecryptJson(js, pass, iters);
+    symDecrypted.textContent = pt;
+  }catch(e){symDecrypted.textContent = 'Decryption failed: '+e.message}
+});
+
+/* Asymmetric UI */
+let currentPublicKey = null;
+let currentPrivateKey = null;
+const pubPemArea = document.getElementById('pubPem');
+const privPemArea = document.getElementById('privPem');
+const importPubBtn = document.getElementById('importPub');
+const importPrivBtn = document.getElementById('importPriv');
+const rsaEncryptBtn = document.getElementById('rsaEncryptBtn');
+const rsaDecryptBtn = document.getElementById('rsaDecryptBtn');
+const rsaPlain = document.getElementById('rsaPlain');
+const rsaCipher = document.getElementById('rsaCipher');
+const rsaCipherIn = document.getElementById('rsaCipherIn');
+const rsaPlainOut = document.getElementById('rsaPlainOut');
+const genKeyPairBtn = document.getElementById('genKeyPair');
+const savePubBtn = document.getElementById('savePub');
+const savePrivBtn = document.getElementById('savePriv');
+const copyRsaCipher = document.getElementById('copyRsaCipher');
+const clearPub = document.getElementById('clearPub');
+const clearPriv = document.getElementById('clearPriv');
+
+importPubBtn.addEventListener('click', async ()=>{
+  try{
+    const pem = pubPemArea.value.trim();
+    if(!pem) return alert('Paste public PEM first.');
+    currentPublicKey = await importPublicPem(pem);
+    alert('Public key imported.');
+  }catch(e){alert('Import failed: '+e.message)}
+});
+importPrivBtn.addEventListener('click', async ()=>{
+  try{
+    const pem = privPemArea.value.trim();
+    if(!pem) return alert('Paste private PEM first.');
+    currentPrivateKey = await importPrivatePem(pem);
+    alert('Private key imported.');
+  }catch(e){alert('Import failed: '+e.message)}
+});
+
+rsaEncryptBtn.addEventListener('click', async ()=>{
+  try{
+    if(!currentPublicKey) return alert('Import or generate a public key first.');
+    const txt = rsaPlain.value;
+    if(!txt) return alert('Enter plaintext.');
+    const c = await rsaEncrypt(currentPublicKey, txt);
+    rsaCipher.textContent = c;
+  }catch(e){rsaCipher.textContent = 'Encryption failed: '+e.message}
+});
+copyRsaCipher.addEventListener('click', ()=>{navigator.clipboard.writeText(rsaCipher.textContent||'').then(()=>alert('Copied'))});
+
+rsaDecryptBtn.addEventListener('click', async ()=>{
+  try{
+    if(!currentPrivateKey) return alert('Import or generate a private key first.');
+    const c = rsaCipherIn.value.trim();
+    if(!c) return alert('Paste base64 ciphertext.');
+    rsaPlainOut.textContent = 'Working...';
+    const p = await rsaDecrypt(currentPrivateKey, c);
+    rsaPlainOut.textContent = p;
+  }catch(e){rsaPlainOut.textContent = 'Decryption failed: '+e.message}
+});
+
+genKeyPairBtn.addEventListener('click', async ()=>{
+  try{
+    genKeyPairBtn.disabled = true; genKeyPairBtn.textContent='Generating...';
+    const kp = await generateRsaPair();
+    currentPublicKey = kp.publicKey; currentPrivateKey = kp.privateKey;
+    const pubPem = await exportPublicKeyToPem(currentPublicKey);
+    const privPem = await exportPrivateKeyToPem(currentPrivateKey);
+    pubPemArea.value = pubPem; privPemArea.value = privPem;
+    alert('Key pair generated (PEM populated).');
+  }catch(e){alert('Generation failed: '+e.message)}
+  finally{genKeyPairBtn.disabled=false; genKeyPairBtn.textContent='Generate Key Pair'}
+});
+
+savePubBtn.addEventListener('click', ()=>{ const p = pubPemArea.value; if(!p) return alert('No public PEM'); download('public_key.pem', p, 'application/x-pem-file')});
+savePrivBtn.addEventListener('click', ()=>{ const p = privPemArea.value; if(!p) return alert('No private PEM'); download('private_key.pem', p, 'application/x-pem-file')});
+clearPub.addEventListener('click', ()=>{pubPemArea.value=''; currentPublicKey=null});
+clearPriv.addEventListener('click', ()=>{privPemArea.value=''; currentPrivateKey=null});
+
+/* File encryption UI */
+const fileToEncrypt = document.getElementById('fileToEncrypt');
+const filePass = document.getElementById('filePass');
+const encryptFileBtn = document.getElementById('encryptFileBtn');
+const fileToDecrypt = document.getElementById('fileToDecrypt');
+const filePass2 = document.getElementById('filePass2');
+const decryptFileBtn = document.getElementById('decryptFileBtn');
+const clearFileFields = document.getElementById('clearFileFields');
+
+encryptFileBtn.addEventListener('click', async ()=>{
+  try{
+    const fi = fileToEncrypt.files[0];
+    const pass = filePass.value;
+    const iters = parseInt(symIters.value || '200000',10);
+    if(!fi) return alert('Select file to encrypt');
+    if(!pass) return alert('Enter passphrase');
+    const arr = await fi.arrayBuffer();
+    const payload = await aesEncryptJson(new TextDecoder().decode(new Uint8Array(arr)), pass, iters);
+    // wrap with original filename for easy restore
+    const wrapper = JSON.stringify({filename:fi.name, payload: JSON.parse(payload)});
+    download(fi.name + '.securetext', wrapper, 'application/json');
+    alert('Encrypted file downloaded.');
+  }catch(e){alert('File encrypt failed: '+e.message)}
+});
+
+decryptFileBtn.addEventListener('click', async ()=>{
+  try{
+    const fi = fileToDecrypt.files[0];
+    const pass = filePass2.value;
+    const iters = parseInt(symIters.value || '200000',10);
+    if(!fi) return alert('Select encrypted .securetext file');
+    if(!pass) return alert('Enter passphrase');
+    const txt = await fi.text();
+    const obj = JSON.parse(txt);
+    if(!obj.payload) return alert('Invalid file format');
+    const plain = await aesDecryptJson(obj.payload, pass, iters);
+    // download restored file
+    download(obj.filename || 'decrypted.bin', plain, 'application/octet-stream');
+    alert('Decrypted file downloaded.');
+  }catch(e){alert('File decrypt failed: '+e.message)}
+});
+clearFileFields.addEventListener('click', ()=>{fileToEncrypt.value=''; filePass.value=''; fileToDecrypt.value=''; filePass2.value='';});
+
+/* About button */
+document.getElementById('aboutBtn').addEventListener('click', ()=> {
+  alert(`SecureText (client-only)\n- Symmetric: AES-GCM with PBKDF2-derived 256-bit key\n- Asymmetric: RSA-OAEP 2048 SHA-256\n- All crypto runs in your browser; nothing is sent anywhere.\n\nFor best security: choose strong passphrases and keep private keys safe.`);
+});
+
+/* Simple drag/drop prevention */
+window.addEventListener('dragover', e=>e.preventDefault());
+window.addEventListener('drop', e=>{ e.preventDefault(); });
+
+</script>
+</body>
+</html>
