@@ -273,7 +273,7 @@ function wrapPEM(b64, label){
   return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----\n`;
 }
 function pemToBinary(pem){
-  const lines = pem.trim().split('\\n').filter(l=>!l.includes('BEGIN') && !l.includes('END')).join('');
+  const lines = pem.trim().split(/\r?\n/).filter(l=>!l.includes('BEGIN') && !l.includes('END')).join('');
   return base64ToArrayBuffer(lines);
 }
 
